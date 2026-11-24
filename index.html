@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SISTEMA DE INCÊNDIO | FUCAPI - JUAREZ TAVARES</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', Courier, monospace;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: #030706;
+            color: #e0f2f1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        @keyframes screen-flash {
+            0% { box-shadow: inset 0 0 0 0 rgba(255, 85, 0, 0); }
+            50% { box-shadow: inset 0 0 65px 18px rgba(255, 85, 0, 0.85); }
+            100% { box-shadow: inset 0 0 0 0 rgba(255, 85, 0, 0); }
+        }
+
+        body.alerta-ativo {
+            animation: screen-flash 0.8s infinite;
+        }
+
+        header {
+            background: linear-gradient(90deg, #070e0d 0%, #0d211c 50%, #070e0d 100%);
+            border-bottom: 1px solid #ff5500;
+            padding: 10px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            box-shadow: 0 2px 20px rgba(255, 85, 0, 0.3);
+            z-index: 1001;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo h1 {
+            font-size: 1.15rem;
+            color: #ff5500;
+            letter-spacing: 1.2px;
+            text-shadow: 0 0 12px rgba(255, 85, 0, 0.5);
+        }
+
+        .logo small {
+            color: #8ab8b0;
+            font-size: 0.68rem;
+            display: block;
+        }
+
+        .pulse {
+            width: 11px;
+            height: 11px;
+            min-width: 11px;
+            background: #ff5500;
+            border-radius: 50%;
+            box-shadow: 0 0 12px #ff5500;
+            animation: blink 1.2s infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0.2; }
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.78rem;
+            flex-wrap: wrap;
+        }
+
+        .status-bar strong {
+            color: #00e5ff;
+        }
+
+        .btn-top {
+            background: #ff550022;
+            color: #ff5500;
+            border: 1px solid #ff5500;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: bold;
+            transition: 0.2s;
+            border-radius: 3px;
+        }
+
+        .btn-top:hover, .btn-top.active-demo {
+            background: #ff5500;
+            color: #030706;
+            box-shadow: 0 0 15px rgba(255, 85, 0, 0.7);
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: 320px 1fr 350px;
+            flex: 1;
+            height: calc(100vh - 58px);
+        }
+
+        .panel {
+            background: #050d0b;
+            padding: 14px;
+            border-right: 1px solid #122b24;
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+            overflow-y: auto;
+        }
+
+        .right-panel {
+            border-right: none;
+            border-left: 1px solid #122b24;
+        }
+
+        h2 {
+            font-size: 0.88rem;
+            color: #ff5500;
+            border-left: 3px solid #ff5500;
+            padding-left: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-alert {
+            background: #4a0d0d;
+            color: #ff3333;
+            border: 1px solid #ff3333;
+            padding: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.8rem;
+            border-radius: 3px;
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(255, 51, 51, 0.5); }
+            70% { box-shadow: 0 0 0 8px rgba(255, 51, 51, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 51, 51, 0); }
+        }
+
+        .btn-alert:active, .btn-alert:hover {
+            background: #ff3333;
+            color: #030706;
+        }
+
+        .btn-extinguish {
+            display: none;
+            background: #003b4d;
+            color: #00e5ff;
+            border: 1px solid #00e5ff;
+            padding: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.8rem;
+            border-radius: 3px;
+        }
+
+        .btn-extinguish.pronto-lancar {
+            background: #00e5ff;
+            color: #030706;
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.8);
+            animation: pulse-cyan 1s infinite alternate;
+        }
+
+        @keyframes pulse-cyan {
+            from { transform: scale(1); }
+            to { transform: scale(1.03); }
+        }
+
+        .btn-mobile-extinguish {
+            display: none;
+            position: absolute;
+            bottom: 75px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #00e5ff;
+            color: #030706;
+            border: 2px solid #ffffff;
+            padding: 12px 24px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            border-radius: 30px;
+            z-index: 2000;
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.8);
+            cursor: pointer;
+            animation: pulse-mobile 1s infinite alternate;
+        }
+
+        @keyframes pulse-mobile {
+            from { transform: translateX(-50%) scale(1); }
+            to { transform: translateX(-50%) scale(1.06); }
+        }
+
+        .input-group {
+            display: flex;
+            gap: 5px;
+        }
+
+        .input-operator {
+            background: #030706;
+            border: 1px solid #1b4238;
+            color: #00e5ff;
+            padding: 7px;
+            font-size: 0.76rem;
+            flex: 1;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .btn-operator {
+            background: #00e5ff22;
+            color: #00e5ff;
+            border: 1px solid #00e5ff;
+            padding: 7px 10px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 3px;
+        }
+        .btn-operator:hover { background: #00e5ff; color: #030706; }
+
+        .btn-clear-op {
+            background: #4a0d0d;
+            color: #ff3333;
+            border: 1px solid #ff3333;
+            padding: 6px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 3px;
+            text-align: center;
+        }
+        .btn-clear-op:hover { background: #ff3333; color: #030706; }
+
+        .btn-report {
+            background: #0d2620;
+            color: #00e5ff;
+            border: 1px solid #00e5ff;
+            padding: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.75rem;
+            border-radius: 3px;
+            text-align: center;
+        }
+        .btn-report:hover { background: #00e5ff; color: #030706; }
+
+        .btn-reset {
+            background: #0a1714;
+            color: #8ab8b0;
+            border: 1px solid #1b4238;
+            padding: 7px;
+            cursor: pointer;
+            font-size: 0.74rem;
+            transition: 0.2s;
+            border-radius: 3px;
+        }
+
+        .btn-reset:active, .btn-reset:hover {
+            border-color: #ff5500;
+            color: #ff5500;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid #122b24;
+            margin: 2px 0;
+        }
+
+        .telemetry-box {
+            background: #030706;
+            border: 1px solid #122b24;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.74rem;
+        }
+
+        .telemetry-box div {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .impact-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .impact-card {
+            background: #030706;
+            border: 1px solid #122b24;
+            padding: 7px;
+            text-align: center;
+        }
+
+        .impact-card span {
+            display: block;
+            font-size: 0.65rem;
+            color: #8ab8b0;
+        }
+
+        .impact-card strong {
+            font-size: 0.9rem;
+            color: #00e5ff;
+        }
+
+        .timer-alert {
+            display: none;
+            background: #4a0d0d;
+            border: 1px solid #ff3333;
+            color: #ff3333;
+            padding: 7px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.8rem;
+            border-radius: 3px;
+        }
+
+        .green { color: #00e5ff; }
+        .red { color: #ff3333; }
+        .orange { color: #ff9900; }
+        .cyan { color: #00e5ff; }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: #050d0b;
+            border: 2px solid #ff5500;
+            padding: 22px;
+            width: 90%;
+            max-width: 480px;
+            box-shadow: 0 0 30px rgba(255, 85, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .modal-content h3 {
+            color: #ff5500;
+            font-size: 1.05rem;
+            border-bottom: 1px solid #122b24;
+            padding-bottom: 6px;
+        }
+
+        .modal-content p {
+            font-size: 0.8rem;
+            color: #8ab8b0;
+            line-height: 1.4;
+        }
+
+        .modal-btn {
+            background: #ff5500;
+            color: #030706;
+            border: none;
+            padding: 9px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .ranking-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-clear-ranking {
+            background: transparent;
+            color: #ff3333;
+            border: 1px solid #ff3333;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            cursor: pointer;
+            border-radius: 2px;
+            font-weight: bold;
+        }
+        .btn-clear-ranking:hover { background: #ff3333; color: #030706; }
+
+        .leaderboard-list {
+            background: #030706;
+            border: 1px solid #122b24;
+            padding: 7px;
+            font-size: 0.72rem;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            max-height: 110px;
+            overflow-y: auto;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            color: #a3e6df;
+            border-bottom: 1px dashed #122b24;
+            padding-bottom: 2px;
+        }
+
+        .drone-cam {
+            position: relative;
+            height: 150px;
+            min-height: 150px;
+            background: radial-gradient(circle, #0e241f 0%, #030706 100%);
+            border: 1px solid #00e5ff;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .drone-cam.thermal-alert {
+            background: radial-gradient(circle, #521808 0%, #1c0502 100%);
+            border-color: #ff3333;
+            animation: smoke-pulse 2s infinite alternate;
+        }
+
+        @keyframes smoke-pulse {
+            0% { filter: contrast(110%) brightness(100%); }
+            100% { filter: contrast(135%) brightness(115%); }
+        }
+
+        .ai-bbox {
+            position: absolute;
+            border: 2px solid #00e5ff;
+            background: rgba(0, 229, 255, 0.08);
+            padding: 4px 8px;
+            z-index: 4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 130px;
+            min-height: 65px;
+        }
+
+        .ai-bbox-label {
+            position: absolute;
+            top: -16px;
+            left: -2px;
+            background: #00e5ff;
+            color: #030706;
+            font-size: 0.6rem;
+            font-weight: bold;
+            padding: 1px 5px;
+            white-space: nowrap;
+        }
+
+        .ai-bbox-emoji { font-size: 1.8rem; }
+
+        .radar-sweep {
+            position: absolute;
+            width: 200px; height: 200px;
+            border-radius: 50%;
+            border: 1px dashed rgba(0, 229, 255, 0.25);
+            animation: spin 6s linear infinite;
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .cam-overlay-top {
+            position: absolute;
+            top: 5px; left: 8px; right: 8px;
+            display: flex; justify-content: space-between;
+            font-size: 0.62rem; color: #00e5ff; z-index: 5;
+        }
+
+        .cam-overlay-bottom {
+            position: absolute;
+            bottom: 5px; left: 8px;
+            font-size: 0.62rem; color: #8ab8b0; z-index: 5;
+        }
+
+        .map-container { position: relative; width: 100%; height: 100%; }
+        #map { width: 100%; height: 100%; background: #030706; }
+
+        .drone-tag {
+            background: rgba(0, 229, 255, 0.9);
+            color: #030706;
+            font-weight: bold;
+            font-size: 0.68rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            white-space: nowrap;
+            box-shadow: 0 0 8px rgba(0,229,255,0.6);
+            border: 1px solid #030706;
+            text-align: center;
+        }
+
+        .radar-hud {
+            position: absolute;
+            top: 15px; right: 15px;
+            background: rgba(3, 7, 6, 0.92);
+            border: 1px solid #ff5500;
+            padding: 8px 12px;
+            z-index: 1000;
+            font-size: 0.72rem;
+            color: #ff5500;
+            box-shadow: 0 0 15px rgba(255,85,0,0.4);
+            border-radius: 4px;
+            pointer-events: none;
+            font-weight: bold;
+        }
+
+        .hud-overlay {
+            position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+            background: rgba(3, 7, 6, 0.92); border: 1px solid #00e5ff;
+            padding: 7px 14px; z-index: 1000; pointer-events: none;
+            text-align: center; width: 90%; max-width: 520px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+        }
+
+        .hud-text { font-size: 0.72rem; color: #00e5ff; font-weight: bold; }
+
+        .terminal {
+            background: #020504; border: 1px solid #122b24;
+            padding: 7px; flex: 1; min-height: 80px;
+            font-size: 0.7rem; color: #5cd6b3; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 3px;
+        }
+
+        .fire-icon {
+            font-size: 46px; 
+            text-align: center; 
+            line-height: 46px;
+            animation: fire-gigante 0.4s infinite alternate ease-in-out;
+            filter: drop-shadow(0 0 20px #ff3333) drop-shadow(0 0 40px #ff5500);
+            cursor: pointer;
+        }
+
+        @keyframes fire-gigante {
+            0% { transform: scale(1); filter: drop-shadow(0 0 15px #ff3333); }
+            100% { transform: scale(1.45); filter: drop-shadow(0 0 35px #ffcc00); }
+        }
+
+        .water-icon {
+            font-size: 40px; text-align: center; line-height: 40px;
+            filter: drop-shadow(0 0 18px #00e5ff);
+            animation: water-splash 0.6s ease-out;
+        }
+
+        @keyframes water-splash {
+            0% { transform: scale(0.5); opacity: 0.5; }
+            50% { transform: scale(1.5); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.9; }
+        }
+
+        .drone-icon {
+            font-size: 32px; text-align: center; line-height: 32px;
+            filter: drop-shadow(0 0 12px #ff5500);
+        }
+
+        @media (max-width: 960px) {
+            body { overflow-y: auto; height: auto; }
+            header { padding: 8px 12px; }
+            .logo h1 { font-size: 0.9rem; }
+            .status-bar { width: 100%; justify-content: space-between; padding-top: 4px; border-top: 1px solid #122b24; }
+            .hide-mobile { display: none; }
+            main { display: flex; flex-direction: column; height: auto; }
+            .map-container { order: 1; height: 44vh; min-height: 290px; border-bottom: 1px solid #ff5500; }
+            .left-panel { order: 2; border-right: none; border-bottom: 1px solid #122b24; overflow-y: visible; }
+            .right-panel { order: 3; border-left: none; overflow-y: visible; padding-bottom: 25px; }
+            .btn-mobile-extinguish.ativo { display: block !important; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <span class="pulse"></span>
+            <div>
+                <h1>SISTEMA DE INCÊNDIO // FUCAPI</h1>
+                <small>AUTOR: JUAREZ TAVARES DE VASCONCELOS FILHO • TURMA: NCI (MANAUS/AM)</small>
+            </div>
+        </div>
+        <div class="status-bar">
+            <button class="btn-top" id="btn-demo" onclick="alternarModoDemo()">🎬 VITRINE: OFF</button>
+            <button class="btn-top" id="btn-som" onclick="alternarAudio()">🔊 ÁUDIO: ON</button>
+            <span class="hide-mobile">FUCAPI: <strong>MANAUS / AM</strong></span>
+            <span id="relogio">00:00:00</span>
+        </div>
+    </header>
+
+    <main>
+        <!-- Painel Esquerdo -->
+        <aside class="panel left-panel">
+            <h2>👤 IDENTIFICAÇÃO DO OPERADOR</h2>
+            <div class="input-group">
+                <input type="text" id="input-nome-op" class="input-operator" placeholder="Nome do visitante...">
+                <button class="btn-operator" onclick="definirOperador()">REGISTRAR</button>
+            </div>
+            <button class="btn-clear-op" onclick="removerOperador()">🗑️ APAGAR NOME DO DRONE</button>
+
+            <hr>
+
+            <h2>⚡ CONTROLE DE EMERGÊNCIA</h2>
+            <div class="timer-alert" id="timer-box">
+                ⏳ TEMPO CRÍTICO: <span id="countdown">25</span>s
+            </div>
+            <button class="btn-alert" id="btn-incendio" onclick="simularIncendio()">
+                🔥 SIMULAR INCÊNDIO NA FLORESTA
+            </button>
+            <button class="btn-extinguish" id="btn-apagar" onclick="combaterIncendio()">
+                💧 LANÇAR RETARDANTE [ESPAÇO]
+            </button>
+            <button class="btn-report" onclick="abrirRelatorioManual()">
+                📄 ABRIR RELATÓRIO TÉCNICO
+            </button>
+            <button class="btn-reset" onclick="resetarSistema()">
+                🔄 RECOLHER DRONE À BASE
+            </button>
+
+            <hr>
+
+            <div class="ranking-header">
+                <h2>🏆 RANKING (MENOR TEMPO)</h2>
+                <button class="btn-clear-ranking" onclick="limparRanking()">APAGAR RANK</button>
+            </div>
+            <div class="leaderboard-list" id="ranking-box"></div>
+        </aside>
+
+        <!-- Mapa Central com Radar -->
+        <section class="map-container">
+            <div class="radar-hud" id="radar-hud">🎯 FEIRA TECNOLÓGICA FUCAPI - PRONTO</div>
+            <div id="map"></div>
+            <button class="btn-mobile-extinguish" id="btn-mobile-ext" onclick="combaterIncendio()">💧 APAGAR INCÊNDIO</button>
+            <div class="hud-overlay" id="hud-box">
+                <div class="hud-text" id="hud-status">Clique no fogo no mapa ou use WASD/Setas para voar até ele!</div>
+            </div>
+        </section>
+
+        <!-- Painel Direito -->
+        <aside class="panel right-panel">
+            <h2>👁️ VISÃO COMPUTACIONAL (YOLO IA)</h2>
+            <div class="drone-cam" id="drone-cam-box">
+                <div class="cam-overlay-top">
+                    <span id="cam-mode">OPTICAL AI // 60FPS</span>
+                    <span id="cam-rec">● LIVE</span>
+                </div>
+                <div class="radar-sweep"></div>
+                
+                <div class="ai-bbox" id="ai-bbox">
+                    <div class="ai-bbox-label" id="ai-bbox-label">ARARA-AZUL [98.2%]</div>
+                    <div class="ai-bbox-emoji" id="ai-bbox-emoji">🦜</div>
+                </div>
+
+                <div class="cam-overlay-bottom" id="cam-info">IA FAUNA & TERMOGRÁFICA ATIVA</div>
+            </div>
+
+            <hr>
+
+            <h2>📊 IMPACTO & TELEMETRIA</h2>
+            <div class="impact-grid">
+                <div class="impact-card">
+                    <span>ÁREA PROTEGIDA</span>
+                    <strong id="hectares-salvos">1.450 ha</strong>
+                </div>
+                <div class="impact-card">
+                    <span>TANQUE DE ÁGUA</span>
+                    <strong id="lbl-agua" class="green">TOTAL 💧</strong>
+                </div>
+            </div>
+            <div class="telemetry-box">
+                <div><span>Operador:</span> <strong id="lbl-operador" class="cyan">NÃO REGISTRADO</strong></div>
+                <div><span>Drone:</span> <strong id="drone-status" class="green">PRONTO NA BASE</strong></div>
+                <div><span>Coordenadas:</span> <strong id="coords">-3.1190, -59.9500</strong></div>
+            </div>
+
+            <hr>
+
+            <h2>🤖 LOG DE OPERAÇÕES TÁTICAS</h2>
+            <div class="terminal" id="ai-log">
+                <p>> Sistema Fucapi 2.0 online.</p>
+                <p>> Desenvolvido por Juarez Tavares (Turma NCI).</p>
+                <p>> Clique no fogo no mapa ou use WASD para pilotar.</p>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Modal de Relatório -->
+    <div class="modal-overlay" id="modal-relatorio">
+        <div class="modal-content">
+            <h3>📄 RELATÓRIO OFICIAL - FEIRA FUCAPI</h3>
+            <p id="modal-texto">Missão concluída com sucesso pelo drone autônomo.</p>
+            <button class="modal-btn" onclick="fecharRelatorio()">FECHAR RELATÓRIO</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let audioAtivo = true;
+        let audioCtx = null;
+        let hectaresTotais = 1450;
+        let timerInterval = null;
+        let sonarInterval = null;
+        let demoAtivo = false;
+        let vooAnimadoInterval = null;
+        let cicloVitrineTimeout = null;
+        let nomeOperadorAtual = "Visitante";
+        let tempoRestanteSegundos = 25;
+        let listaRanking = [];
+
+        function iniciarAudioCtx() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        document.body.addEventListener('touchstart', iniciarAudioCtx, { once: true });
+        document.body.addEventListener('click', iniciarAudioCtx, { once: true });
+
+        function falarIA(texto) {
+            if (!audioAtivo || !('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const msg = new SpeechSynthesisUtterance(texto);
+            msg.lang = 'pt-BR';
+            msg.rate = 1.15;
+            window.speechSynthesis.speak(msg);
+        }
+
+        function alternarAudio() {
+            iniciarAudioCtx();
+            audioAtivo = !audioAtivo;
+            const btn = document.getElementById('btn-som');
+            btn.innerText = audioAtivo ? "🔊 ÁUDIO: ON" : "🔇 ÁUDIO: OFF";
+            btn.style.color = audioAtivo ? "#00e5ff" : "#ff3333";
+            btn.style.borderColor = audioAtivo ? "#00e5ff" : "#ff3333";
+            if (audioAtivo) falarIA("Sistema de áudio ativado.");
+        }
+
+        function definirOperador() {
+            const input = document.getElementById('input-nome-op');
+            const nome = input.value.trim();
+            if (nome) {
+                nomeOperadorAtual = nome;
+                document.getElementById('lbl-operador').innerText = nome.toUpperCase();
+                atualizarIconeDrone();
+                falarIA(`Operador ${nome} assumindo o comando.`);
+                adicionarLog(`👤 Operador registrado: ${nome}`);
+                input.value = "";
+            }
+        }
+
+        function removerOperador() {
+            nomeOperadorAtual = "Visitante";
+            document.getElementById('lbl-operador').innerText = "NÃO REGISTRADO";
+            atualizarIconeDrone();
+            falarIA("Identificação removida.");
+            adicionarLog("🗑️ Nome removido do drone.");
+        }
+
+        function tocarBipeRadar(freq = 1200) {
+            if (!audioAtivo) return;
+            iniciarAudioCtx();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(freq + 450, audioCtx.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.08);
+        }
+
+        function tocarSireneIncendio() {
+            if (!audioAtivo) return;
+            iniciarAudioCtx();
+            for (let i = 0; i < 3; i++) {
+                const start = audioCtx.currentTime + (i * 0.35);
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(500, start);
+                osc.frequency.linearRampToValueAtTime(950, start + 0.17);
+                osc.frequency.linearRampToValueAtTime(500, start + 0.34);
+                gain.gain.setValueAtTime(0.2, start);
+                gain.gain.exponentialRampToValueAtTime(0.001, start + 0.34);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(start);
+                osc.stop(start + 0.34);
+            }
+        }
+
+        function tocarSomAguaESucesso() {
+            if (!audioAtivo) return;
+            iniciarAudioCtx();
+            const bufferSize = audioCtx.sampleRate * 1.4;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.8;
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.4);
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start();
+
+            setTimeout(() => {
+                tocarBipeRadar(1046);
+                setTimeout(() => tocarBipeRadar(1318), 120);
+            }, 1100);
+        }
+
+        function iniciarSonarTermico() {
+            clearInterval(sonarInterval);
+            sonarInterval = setInterval(() => {
+                if (incendioAtivo) tocarBipeRadar(1700);
+            }, 900);
+        }
+
+        function pararSonarTermico() { clearInterval(sonarInterval); }
+
+        function iniciarTimerContencao() {
+            clearInterval(timerInterval);
+            const box = document.getElementById('timer-box');
+            const span = document.getElementById('countdown');
+            tempoRestanteSegundos = 25;
+            span.innerText = tempoRestanteSegundos;
+            box.style.display = 'block';
+
+            timerInterval = setInterval(() => {
+                tempoRestanteSegundos--;
+                span.innerText = tempoRestanteSegundos;
+                if (tempoRestanteSegundos <= 0) {
+                    clearInterval(timerInterval);
+                    falarIA("Atenção! O tempo esgotou e o fogo avançou.");
+                }
+            }, 1000);
+        }
+
+        function pararTimerContencao() {
+            clearInterval(timerInterval);
+            pararSonarTermico();
+            document.getElementById('timer-box').style.display = 'none';
+            document.body.classList.remove('alerta-ativo');
+        }
+
+        const BASE_DRONE = [-3.1190, -59.9500];
+        const map = L.map('map').setView(BASE_DRONE, 11);
+
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Satélite Sistema de Incêndio - Fucapi'
+        }).addTo(map);
+
+        const fireIcon = L.divIcon({ className: 'fire-icon', html: '🔥', iconSize: [46, 46], iconAnchor: [23, 23] });
+        const waterIcon = L.divIcon({ className: 'water-icon', html: '💧💦', iconSize: [46, 46], iconAnchor: [23, 23] });
+
+        let posAtualDrone = [...BASE_DRONE];
+        let camadaOcorrencia = L.layerGroup().addTo(map);
+        let linhaRota = null;
+        let incendioAtivo = false;
+        let coordsFogo = [-3.0650, -59.9850];
+
+        function atualizarIconeDrone() {
+            const htmlIcon = `
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <div class="drone-tag">${nomeOperadorAtual}</div>
+                    <div class="drone-icon">🚁</div>
+                </div>
+            `;
+            const customIcon = L.divIcon({ className: '', html: htmlIcon, iconSize: [90, 52], iconAnchor: [45, 26] });
+            droneMarker.setIcon(customIcon);
+        }
+
+        let droneMarker = L.marker(BASE_DRONE, { zIndexOffset: 1000 }).addTo(map);
+        atualizarIconeDrone();
+
+        function calcularDistanciaKm() {
+            const latDiff = Math.abs(posAtualDrone[0] - coordsFogo[0]);
+            const lngDiff = Math.abs(posAtualDrone[1] - coordsFogo[1]);
+            return Math.round((latDiff + lngDiff) * 111);
+        }
+
+        function atualizarLinhaRota() {
+            if (linhaRota) {
+                map.removeLayer(linhaRota);
+                linhaRota = null;
+            }
+            if (incendioAtivo) {
+                linhaRota = L.polyline([posAtualDrone, coordsFogo], {
+                    color: '#ff5500',
+                    weight: 3,
+                    dashArray: '8, 8',
+                    opacity: 0.85
+                }).addTo(map);
+            }
+        }
+
+        function atualizarDistanciaRadar() {
+            const btnApagar = document.getElementById('btn-apagar');
+            const btnMobile = document.getElementById('btn-mobile-ext');
+
+            if (!incendioAtivo) {
+                document.getElementById('radar-hud').innerText = "🎯 FUCAPI: HELICÓPTERO PRONTO";
+                btnApagar.classList.remove('pronto-lancar');
+                btnMobile.classList.remove('ativo');
+                return;
+            }
+
+            atualizarLinhaRota();
+            const distanciaAprox = calcularDistanciaKm();
+
+            // Raio generoso de 6km para facilitar a jogabilidade na feira
+            if (distanciaAprox <= 6) {
+                document.getElementById('radar-hud').innerText = "🚨 ALVO NA MIRA! LANCE A ÁGUA!";
+                btnApagar.innerText = "💧 LANÇAR RETARDANTE AGORA! [ESPAÇO]";
+                btnApagar.classList.add('pronto-lancar');
+                btnMobile.classList.add('ativo');
+            } else {
+                document.getElementById('radar-hud').innerText = `🎯 FOGO A ~${distanciaAprox}km (CLIQUE NO FOGO)`;
+                btnApagar.innerText = `💧 CHEGUE PERTO DO FOGO (${distanciaAprox}km)`;
+                btnApagar.classList.remove('pronto-lancar');
+                btnMobile.classList.remove('ativo');
+            }
+        }
+
+        function moverDrone(lat, lng, silencioso = false) {
+            posAtualDrone = [parseFloat(lat.toFixed(4)), parseFloat(lng.toFixed(4))];
+            droneMarker.setLatLng(posAtualDrone);
+            document.getElementById('coords').innerText = `${posAtualDrone[0]}, ${posAtualDrone[1]}`;
+            document.getElementById('drone-status').innerText = "EM VOO TÁTICO";
+            if (!silencioso) {
+                tocarBipeRadar(900);
+            }
+            atualizarDistanciaRadar();
+        }
+
+        // Voo suave para qualquer destino clicado no mapa (PC ou Mobile)
+        function voarParaDestino(destinoLat, destinoLng, callbackChegada) {
+            clearInterval(vooAnimadoInterval);
+            const passosTotais = 22;
+            let passoAtual = 0;
+
+            const latInicial = posAtualDrone[0];
+            const lngInicial = posAtualDrone[1];
+            const deltaLat = (destinoLat - latInicial) / passosTotais;
+            const deltaLng = (destinoLng - lngInicial) / passosTotais;
+
+            vooAnimadoInterval = setInterval(() => {
+                passoAtual++;
+                const novaLat = latInicial + (deltaLat * passoAtual);
+                const novaLng = lngInicial + (deltaLng * passoAtual);
+                moverDrone(novaLat, novaLng, true);
+
+                if (passoAtual >= passosTotais) {
+                    clearInterval(vooAnimadoInterval);
+                    if (callbackChegada) callbackChegada();
+                }
+            }, 45);
+        }
+
+        map.on('click', function(e) {
+            if (demoAtivo) return;
+            const destLat = e.latlng.lat;
+            const destLng = e.latlng.lng;
+            adicionarLog(`🚁 Voando para coordenada: ${destLat.toFixed(3)}, ${destLng.toFixed(3)}`);
+            voarParaDestino(destLat, destLng);
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (document.activeElement.tagName === 'INPUT') return;
+
+            const passo = 0.009;
+            let moveu = false;
+
+            if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') {
+                posAtualDrone[0] += passo;
+                moveu = true;
+            } else if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') {
+                posAtualDrone[0] -= passo;
+                moveu = true;
+            } else if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
+                posAtualDrone[1] -= passo;
+                moveu = true;
+            } else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
+                posAtualDrone[1] += passo;
+                moveu = true;
+            } else if (e.code === 'Space') {
+                e.preventDefault();
+                if (incendioAtivo) combaterIncendio();
+                return;
+            }
+
+            if (moveu) {
+                e.preventDefault();
+                clearInterval(vooAnimadoInterval);
+                moverDrone(posAtualDrone[0], posAtualDrone[1]);
+                map.panTo(posAtualDrone);
+            }
+        });
+
+        function simularIncendio() {
+            if (incendioAtivo) return;
+            incendioAtivo = true;
+            tocarSireneIncendio();
+            iniciarSonarTermico();
+            iniciarTimerContencao();
+            document.body.classList.add('alerta-ativo');
+
+            const latFogo = -3.0650 + (Math.random() - 0.5) * 0.08;
+            const lngFogo = -59.9850 + (Math.random() - 0.5) * 0.08;
+            coordsFogo = [latFogo, lngFogo];
+
+            camadaOcorrencia.clearLayers();
+            const fireMarker = L.marker(coordsFogo, { icon: fireIcon }).addTo(camadaOcorrencia);
+            
+            // Permite clicar diretamente no ícone do fogo para voar até ele
+            fireMarker.on('click', function() {
+                if (!demoAtivo) {
+                    adicionarLog("🎯 Alvo travado! Helicóptero indo até o incêndio...");
+                    voarParaDestino(coordsFogo[0], coordsFogo[1]);
+                }
+            });
+
+            // Ajusta o zoom automaticamente para mostrar TANTO o drone QUANTO o fogo na mesma tela
+            const bounds = L.latLngBounds([posAtualDrone, coordsFogo]);
+            map.fitBounds(bounds, { padding: [70, 70], maxZoom: 13 });
+
+            document.getElementById('btn-incendio').style.display = 'none';
+            document.getElementById('btn-apagar').style.display = 'block';
+            document.getElementById('drone-cam-box').classList.add('thermal-alert');
+            document.getElementById('ai-bbox').style.borderColor = '#ff3333';
+            document.getElementById('ai-bbox-label').style.background = '#ff3333';
+            document.getElementById('ai-bbox-label').innerText = 'FOGO GIGANTE [99.4%]';
+            document.getElementById('ai-bbox-emoji').innerText = '🔥';
+
+            falarIA("Alerta! Foco de incêndio detectado. Clique no fogo ou voe até ele para apagar.");
+            adicionarLog(`🔥 FOCO DETECTADO! Clique no fogo ou use WASD/Setas.`);
+            atualizarDistanciaRadar();
+        }
+
+        function combaterIncendio() {
+            if (!incendioAtivo) {
+                falarIA("Nenhum incêndio ativo.");
+                return;
+            }
+
+            // Se o visitante clicar em "Lançar Retardante" mesmo estando longe no modo manual,
+            // o helicóptero voa automaticamente até o fogo e já apaga na chegada!
+            if (calcularDistanciaKm() > 6 && !demoAtivo) {
+                adicionarLog("🚁 Piloto automático acionado: voando até o fogo para lançar água...");
+                falarIA("Indo até o foco de incêndio.");
+                voarParaDestino(coordsFogo[0], coordsFogo[1], () => {
+                    executarExtincao();
+                });
+                return;
+            }
+
+            executarExtincao();
+        }
+
+        function executarExtincao() {
+            if (!incendioAtivo) return;
+            incendioAtivo = false;
+            pararTimerContencao();
+            tocarSomAguaESucesso();
+
+            if (linhaRota) {
+                map.removeLayer(linhaRota);
+                linhaRota = null;
+            }
+
+            camadaOcorrencia.clearLayers();
+            L.marker(coordsFogo, { icon: waterIcon }).addTo(camadaOcorrencia);
+            setTimeout(() => {
+                if (!incendioAtivo) camadaOcorrencia.clearLayers();
+            }, 1500);
+
+            document.getElementById('btn-incendio').style.display = 'block';
+            document.getElementById('btn-apagar').style.display = 'none';
+            document.getElementById('btn-apagar').classList.remove('pronto-lancar');
+            document.getElementById('btn-mobile-ext').classList.remove('ativo');
+            document.getElementById('drone-cam-box').classList.remove('thermal-alert');
+            document.getElementById('ai-bbox').style.borderColor = '#00e5ff';
+            document.getElementById('ai-bbox-label').style.background = '#00e5ff';
+            document.getElementById('ai-bbox-label').innerText = 'ARARA-AZUL [98.2%]';
+            document.getElementById('ai-bbox-emoji').innerText = '🦜';
+            document.getElementById('radar-hud').innerText = "🎯 FUCAPI: INCÊNDIO EXTINTO!";
+
+            hectaresTotais += 50;
+            document.getElementById('hectares-salvos').innerText = `${hectaresTotais} ha`;
+            document.getElementById('lbl-agua').innerText = 'REABASTECIDO 💧';
+
+            const tempoDecorrido = Math.max(1, 25 - tempoRestanteSegundos);
+            adicionarLog(`💧 Incêndio extinto por ${nomeOperadorAtual} em ${tempoDecorrido}s!`);
+            falarIA(`Fogo extinto com sucesso!`);
+
+            listaRanking.push({ nome: nomeOperadorAtual, tempo: tempoDecorrido });
+            listaRanking.sort((a, b) => a.tempo - b.tempo);
+            atualizarRankingUI();
+        }
+
+        function atualizarRankingUI() {
+            const box = document.getElementById('ranking-box');
+            box.innerHTML = "";
+            if (listaRanking.length === 0) {
+                box.innerHTML = "<div class='leaderboard-item'><span>Nenhum registro ainda</span></div>";
+                return;
+            }
+            listaRanking.slice(0, 5).forEach((item, index) => {
+                box.innerHTML += `<div class='leaderboard-item'><span>#${index+1} ${item.nome}</span> <strong>${item.tempo}s</strong></div>`;
+            });
+        }
+
+        function limparRanking() {
+            listaRanking = [];
+            atualizarRankingUI();
+        }
+
+        function abrirRelatorioManual() {
+            mostrarRelatorio("Relatório técnico operacional do Sistema Fucapi.", "N/A");
+        }
+
+        function mostrarRelatorio(texto, tempo) {
+            document.getElementById('modal-texto').innerHTML = `
+                <b>Operador:</b> ${nomeOperadorAtual}<br>
+                <b>Status:</b> ${texto}<br>
+                <b>Tempo de Resposta:</b> ${tempo}s<br>
+                <b>Área Protegida:</b> ${hectaresTotais} hectares<br>
+                <b>Localização:</b> Manaus/AM (FUCAPI)
+            `;
+            document.getElementById('modal-relatorio').style.display = 'flex';
+        }
+
+        function fecharRelatorio() {
+            document.getElementById('modal-relatorio').style.display = 'none';
+        }
+
+        function resetarSistema() {
+            clearInterval(vooAnimadoInterval);
+            pararTimerContencao();
+            incendioAtivo = false;
+            if (linhaRota) {
+                map.removeLayer(linhaRota);
+                linhaRota = null;
+            }
+            camadaOcorrencia.clearLayers();
+            posAtualDrone = [...BASE_DRONE];
+            droneMarker.setLatLng(BASE_DRONE);
+            map.setView(BASE_DRONE, 11);
+            document.getElementById('drone-status').innerText = "PRONTO NA BASE";
+            document.getElementById('btn-incendio').style.display = 'block';
+            document.getElementById('btn-apagar').style.display = 'none';
+            document.getElementById('btn-mobile-ext').classList.remove('ativo');
+            document.getElementById('drone-cam-box').classList.remove('thermal-alert');
+            document.getElementById('radar-hud').innerText = "🎯 FEIRA TECNOLÓGICA FUCAPI - PRONTO";
+            adicionarLog("🔄 Helicóptero recolhido à base.");
+        }
+
+        function alternarModoDemo() {
+            const btn = document.getElementById('btn-demo');
+            if (demoAtivo) {
+                demoAtivo = false;
+                clearInterval(vooAnimadoInterval);
+                clearTimeout(cicloVitrineTimeout);
+                btn.classList.remove('active-demo');
+                btn.innerText = "🎬 VITRINE: OFF";
+                falarIA("Modo vitrine desativado.");
+                adicionarLog("⏹️ Modo Vitrine encerrado.");
+            } else {
+                demoAtivo = true;
+                btn.classList.add('active-demo');
+                btn.innerText = "🎬 VITRINE: ON";
+                nomeOperadorAtual = "IA Autônoma";
+                document.getElementById('lbl-operador').innerText = "IA AUTÔNOMA";
+                atualizarIconeDrone();
+                falarIA("Modo vitrine ativado. Demonstração autônoma iniciada.");
+                adicionarLog("▶️ Modo Vitrine ativo: operação autônoma.");
+                executarCicloVitrine();
+            }
+        }
+
+        function executarCicloVitrine() {
+            if (!demoAtivo) return;
+
+            resetarSistema();
+            
+            cicloVitrineTimeout = setTimeout(() => {
+                if (!demoAtivo) return;
+                simularIncendio();
+
+                cicloVitrineTimeout = setTimeout(() => {
+                    if (!demoAtivo) return;
+                    voarParaDestino(coordsFogo[0], coordsFogo[1], () => {
+                        cicloVitrineTimeout = setTimeout(() => {
+                            if (!demoAtivo) return;
+                            executarExtincao();
+
+                            cicloVitrineTimeout = setTimeout(() => {
+                                if (demoAtivo) executarCicloVitrine();
+                            }, 4000);
+                        }, 500);
+                    });
+                }, 1500);
+            }, 1000);
+        }
+
+        function adicionarLog(texto) {
+            const terminal = document.getElementById('ai-log');
+            const p = document.createElement('p');
+            p.innerText = `> ${texto}`;
+            terminal.appendChild(p);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        setInterval(() => {
+            const agora = new Date();
+            document.getElementById('relogio').innerText = agora.toTimeString().split(' ')[0];
+        }, 1000);
+
+        atualizarRankingUI();
+    </script>
+</body>
+</html>
